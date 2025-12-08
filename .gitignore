@@ -1,0 +1,10 @@
+.venv/
+wheelhouse/
+instance/
+__pycache__/
+.ruff_cache/
+.pytest_cache/
+.env
+.env.*
+*.sqlite3
+*.sqlite3-*

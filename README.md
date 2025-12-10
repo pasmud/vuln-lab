@@ -27,7 +27,7 @@ Open `http://127.0.0.1:5000/`. `VULN_LAB_LOCAL_HTTP=1` is explicitly for this lo
 
 1. Sign in as `alice`. Create a note titled `Alice's tea < coffee & cake` with the body `Bring two cups & a spoon.` The punctuation displays as ordinary text.
 2. Sign out and sign in as `bob`. The list is empty. Create a note titled `Shopping list` and open it from the list.
-3. Sign back in as `alice`. Her tea note is still there and Bob's shopping list is not. Open the tea note and select **Delete note** to remove it.
+3. Sign back in as `alice`. Her tea note is still there and Bob's shopping list is not. Open the tea note and select **Edit note** to update it, or **Delete note** to remove it.
 
 ## Interface and errors
 
@@ -37,10 +37,11 @@ Open `http://127.0.0.1:5000/`. `VULN_LAB_LOCAL_HTTP=1` is explicitly for this lo
 | `GET /` | List the signed-in user's notes, newest first |
 | `POST /notes` | Create a note for the signed-in user |
 | `GET /notes/<id>` | Read an owned note |
+| `GET /notes/<id>/edit`, `POST /notes/<id>/edit` | Show the edit form and save changes to an owned note |
 | `POST /notes/<id>/delete` | Delete an owned note |
 | `POST /logout` | Sign out |
 
-Successful form submissions redirect with `303`. Missing notes and notes owned by another user both return `404`. Invalid fields or unverifiable forms return `400`, incorrect credentials return `401`, and a request body over 32 KiB on a form route returns `413`. The forms use URL-encoded bodies (`415` for unsupported types). Titles and bodies are limited to 80 and 2,000 characters respectively. At 100 notes, delete one before adding another (`409`). If sign-in returns `503`, check that you ran `init-db` from this checkout and that the SQLite file is accessible.
+Successful form submissions redirect with `303`. Missing notes and notes owned by another user both return `404`. Invalid fields or unverifiable forms return `400`, incorrect credentials return `401`, and a request body over 32 KiB on a form route returns `413`. The forms use URL-encoded bodies (`415` for unsupported types). Titles and bodies are limited to 80 and 2,000 characters respectively, whether creating or editing. At 100 notes, delete one before adding another (`409`); editing is still available and does not change list order. If sign-in returns `503`, check that you ran `init-db` from this checkout and that the SQLite file is accessible.
 
 ## Verify
 

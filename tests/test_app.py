@@ -120,12 +120,13 @@ class AccountTests(AppFixture):
                 self.assertEqual(response.status_code, 400)
 
     def test_anonymous_visitors_cannot_use_note_routes(self):
-        for path in ("/", "/notes/1"):
+        for path in ("/", "/notes/1", "/notes/1/edit"):
             with self.subTest(path=path):
                 response = self.get(path)
                 self.assertEqual((response.status_code, response.location), (303, "/login"))
         data = {"csrf_token": self.token("/login"), "title": "Draft", "body": "A first line."}
         self.assertEqual(self.post("/notes", data).location, "/login")
+        self.assertEqual(self.post("/notes/1/edit", data).location, "/login")
         self.sign_in()
         self.assertIn(b"No notes yet.", self.get("/").data)
 
@@ -238,6 +239,49 @@ class NoteTests(AppFixture):
         self.create_note(client=bob)
         self.assertEqual(self.post(f"{path}/delete", data).status_code, 303)
         self.assertEqual(self.post("/notes", data).status_code, 303)
+
+
+class EditTests(AppFixture):
+    def test_owner_can_edit_in_place(self):
+        self.sign_in()
+        path = self.create_note('Basil & "mint"', "\nTea < coffee")
+        edit = f"{path}/edit"
+        self.assertIn(f'href="{edit}"'.encode(), self.get(path).data)
+        page = self.get(edit)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(b'value="Basil &amp; &#34;mint&#34;"', page.data)
+        self.assertIn(b">\n\nTea &lt; coffee</textarea>", page.data)
+
+        data = {"csrf_token": self.token(edit), "title": "Tea & cake", "body": "One.\r\nTwo."}
+        result = self.post(edit, data)
+        self.assertEqual((result.status_code, result.location), (303, path))
+        self.assertIn(b"Tea &amp; cake", self.get("/").data)
+        self.assertNotIn(b"Basil", self.get("/").data)
+        self.assertIn(b"One.\nTwo.", self.get(path).data)
+
+    def test_edit_hides_missing_and_other_owners_notes(self):
+        self.sign_in()
+        path = self.create_note()
+        bob = self.app.test_client()
+        self.sign_in("bob", BOB_PASSWORD, bob)
+        edit, missing = f"{path}/edit", "/notes/9999/edit"
+        data = {"csrf_token": self.token(client=bob), "title": "Draft", "body": "A line."}
+        for request in (lambda url: self.get(url, bob), lambda url: self.post(url, data, bob)):
+            with self.subTest(method=request):
+                foreign = request(edit)
+                self.assertEqual(foreign.status_code, 404)
+                self.assertEqual(foreign.data, request(missing).data)
+        self.assertIn(b"Garden plans", self.get(path).data)
+
+    def test_edit_rejects_invalid_fields_and_missing_token_without_changing_note(self):
+        self.sign_in()
+        path = self.create_note()
+        edit = f"{path}/edit"
+        self.assertEqual(self.post(edit, {"title": "New", "body": "A line."}).status_code, 400)
+        invalid = {"csrf_token": self.token(edit), "title": "New", "body": " "}
+        self.assertEqual(self.post(edit, invalid).status_code, 400)
+        self.assertIn(b"Garden plans", self.get(path).data)
+        self.assertIn(b"Plant basil.", self.get(path).data)
 
 
 class RequestTests(AppFixture):

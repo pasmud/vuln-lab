@@ -6,6 +6,7 @@
   <h1>{{ note['title'] }}</h1>
   <p class="note-body">{{ note['body'] }}</p>
 </article>
+<p><a href="{{ url_for('notes.edit_note', note_id=note['id']) }}">Edit note</a></p>
 <form method="post" action="{{ url_for('notes.delete_note', note_id=note['id']) }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <button class="danger">Delete note</button>

@@ -74,16 +74,7 @@ def index():
 @bp.post("/notes")
 @login_required
 def create_note():
-    title, body = field("title"), field("body").replace("\r\n", "\n").replace("\r", "\n")
-    if not valid_note_field(title, TITLE_MAX) or not valid_note_field(body, BODY_MAX):
-        abort(
-            400,
-            description=(
-                f"Enter a nonblank title (up to {TITLE_MAX} characters) and body "
-                f"(up to {BODY_MAX} characters), without NUL characters."
-            ),
-        )
-
+    title, body = note_fields()
     db = get_db()
     with db:
         inserted = db.execute(
@@ -100,6 +91,19 @@ def valid_note_field(value, limit):
     return len(value) <= limit and bool(value.strip()) and "\0" not in value
 
 
+def note_fields():
+    title, body = field("title"), field("body").replace("\r\n", "\n").replace("\r", "\n")
+    if not valid_note_field(title, TITLE_MAX) or not valid_note_field(body, BODY_MAX):
+        abort(
+            400,
+            description=(
+                f"Enter a nonblank title (up to {TITLE_MAX} characters) and body "
+                f"(up to {BODY_MAX} characters), without NUL characters."
+            ),
+        )
+    return title, body
+
+
 def checked_note_id(value):
     if not _NOTE_ID.fullmatch(value):
         abort(404)
@@ -109,14 +113,38 @@ def checked_note_id(value):
     return note_id
 
 
+def owned_note(note_id):
+    query = "SELECT id, title, body FROM notes WHERE id = ? AND owner_id = ?"
+    note = get_db().execute(query, (note_id, g.user_id)).fetchone()
+    if note is None:
+        abort(404)
+    return note
+
+
 @bp.get("/notes/<note_id>")
 @login_required
 def detail(note_id):
-    query = "SELECT id, title, body FROM notes WHERE id = ? AND owner_id = ?"
-    note = get_db().execute(query, (checked_note_id(note_id), g.user_id)).fetchone()
-    if note is None:
-        abort(404)
-    return render_template("detail.html", note=note)
+    return render_template("detail.html", note=owned_note(checked_note_id(note_id)))
+
+
+@bp.route("/notes/<note_id>/edit", methods=["GET", "POST"])
+@login_required
+def edit_note(note_id):
+    note_id = checked_note_id(note_id)
+    note = owned_note(note_id)
+    if request.method != "POST":
+        return render_template("edit.html", note=note, title_max=TITLE_MAX, body_max=BODY_MAX)
+
+    title, body = note_fields()
+    db = get_db()
+    with db:
+        updated = db.execute(
+            "UPDATE notes SET title = ?, body = ? WHERE id = ? AND owner_id = ?",
+            (title, body, note_id, g.user_id),
+        )
+        if not updated.rowcount:
+            abort(404)
+    return redirect(url_for("notes.detail", note_id=note_id), code=303)
 
 
 @bp.post("/notes/<note_id>/delete")

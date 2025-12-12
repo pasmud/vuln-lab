@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}Confirm deletion{% endblock %}
+{% block content %}
+<h1>Delete note?</h1>
+<p>Delete <strong>{{ note['title'] }}</strong>? This cannot be undone.</p>
+<form method="post" action="{{ url_for('notes.delete_note', note_id=note['id']) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button class="danger">Delete permanently</button>
+</form>
+<p><a href="{{ url_for('notes.detail', note_id=note['id']) }}">Cancel</a></p>
+{% endblock %}

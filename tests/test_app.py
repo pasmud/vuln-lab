@@ -120,13 +120,14 @@ class AccountTests(AppFixture):
                 self.assertEqual(response.status_code, 400)
 
     def test_anonymous_visitors_cannot_use_note_routes(self):
-        for path in ("/", "/notes/1", "/notes/1/edit"):
+        for path in ("/", "/notes/1", "/notes/1/edit", "/notes/1/delete"):
             with self.subTest(path=path):
                 response = self.get(path)
                 self.assertEqual((response.status_code, response.location), (303, "/login"))
         data = {"csrf_token": self.token("/login"), "title": "Draft", "body": "A first line."}
         self.assertEqual(self.post("/notes", data).location, "/login")
         self.assertEqual(self.post("/notes/1/edit", data).location, "/login")
+        self.assertEqual(self.post("/notes/1/delete", data).location, "/login")
         self.sign_in()
         self.assertIn(b"No notes yet.", self.get("/").data)
 
@@ -171,18 +172,31 @@ class NoteTests(AppFixture):
         missing = self.get("/notes/9999", bob)
         self.assertEqual(foreign.status_code, 404)
         self.assertEqual(foreign.data, missing.data)
-        result = self.post(f"{path}/delete", {"csrf_token": self.token(client=bob)}, bob)
+        delete, missing_delete = f"{path}/delete", "/notes/9999/delete"
+        confirmation = self.get(delete, bob)
+        self.assertEqual(confirmation.status_code, 404)
+        self.assertEqual(confirmation.data, self.get(missing_delete, bob).data)
+        data = {"csrf_token": self.token(client=bob)}
+        result = self.post(delete, data, bob)
         self.assertEqual(result.status_code, 404)
+        self.assertEqual(result.data, self.post(missing_delete, data, bob).data)
         self.assertEqual(self.get(path).status_code, 200)
 
     def test_owner_can_delete_and_get_never_deletes(self):
         self.sign_in()
-        path = self.create_note()
-        self.assertEqual(self.get(f"{path}/delete").status_code, 405)
+        path = self.create_note("Basil & mint")
+        delete = f"{path}/delete"
+        self.assertIn(f'href="{delete}"'.encode(), self.get(path).data)
+        confirmation = self.get(delete)
+        self.assertEqual(confirmation.status_code, 200)
+        self.assertIn(b"Basil &amp; mint", confirmation.data)
+        self.assertIn(f'href="{path}">Cancel'.encode(), confirmation.data)
         self.assertEqual(self.get(path).status_code, 200)
-        data = {"csrf_token": self.token(path)}
-        self.assertEqual(self.post(f"{path}/delete", data).location, "/")
-        self.assertEqual(self.post(f"{path}/delete", data).status_code, 404)
+        data = {"csrf_token": self.token(delete)}
+        result = self.post(delete, data)
+        self.assertEqual((result.status_code, result.location), (303, "/"))
+        self.assertEqual(self.post(delete, data).status_code, 404)
+        self.assertEqual(self.get(delete).status_code, 404)
         self.assertEqual(self.get(path).status_code, 404)
         self.assertIn(b"No notes yet.", self.get("/").data)
 
@@ -294,6 +308,8 @@ class RequestTests(AppFixture):
         for target in ("/logout", f"{path}/delete"):
             with self.subTest(path=target):
                 self.assertEqual(self.post(target, {"unused": "value"}).status_code, 400)
+        other = self.token("/login", self.app.test_client())
+        self.assertEqual(self.post(f"{path}/delete", {"csrf_token": other}).status_code, 400)
         self.assertEqual(self.get(path).status_code, 200)
 
     def test_invalid_form_tokens_do_not_write(self):

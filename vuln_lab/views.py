@@ -147,6 +147,12 @@ def edit_note(note_id):
     return redirect(url_for("notes.detail", note_id=note_id), code=303)
 
 
+@bp.get("/notes/<note_id>/delete")
+@login_required
+def confirm_delete(note_id):
+    return render_template("delete.html", note=owned_note(checked_note_id(note_id)))
+
+
 @bp.post("/notes/<note_id>/delete")
 @login_required
 def delete_note(note_id):

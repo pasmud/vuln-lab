@@ -64,10 +64,25 @@ def logout():
 @bp.get("/")
 @login_required
 def index():
-    query = "SELECT id, title FROM notes WHERE owner_id = ? ORDER BY id DESC"
-    notes = get_db().execute(query, (g.user_id,)).fetchall()
+    terms = request.args.getlist("q")
+    term = terms[0] if terms else ""
+    if len(terms) > 1 or len(term) > TITLE_MAX or "\0" in term:
+        abort(400, description=f"Supply one search term of up to {TITLE_MAX} characters.")
+    term = term.strip()
+    query = "SELECT id, title FROM notes WHERE owner_id = ? ORDER BY id DESC LIMIT ?"
+    notes = get_db().execute(query, (g.user_id, NOTE_LIMIT)).fetchall()
+    total_notes = len(notes)
+    if term:
+        folded = term.casefold()
+        notes = [note for note in notes if folded in note["title"].casefold()]
     return render_template(
-        "index.html", notes=notes, title_max=TITLE_MAX, body_max=BODY_MAX, note_limit=NOTE_LIMIT
+        "index.html",
+        notes=notes,
+        term=term,
+        total_notes=total_notes,
+        title_max=TITLE_MAX,
+        body_max=BODY_MAX,
+        note_limit=NOTE_LIMIT,
     )
 
 

@@ -8,13 +8,23 @@
     <button class="secondary">Sign out</button>
   </form>
 </div>
-<p>{{ notes|length }} of {{ note_limit }} notes</p>
+<p>{{ total_notes }} of {{ note_limit }} notes</p>
+<form method="get" action="{{ url_for('notes.index') }}" role="search">
+  <label for="q">Search note titles</label>
+  <input id="q" name="q" type="search" maxlength="{{ title_max }}" value="{{ term }}">
+  <button class="secondary">Search</button>
+</form>
+{% if term %}
+<p>{{ notes|length }} matching notes. <a href="{{ url_for('notes.index') }}">Clear search</a></p>
+{% endif %}
 {% if notes %}
 <ul>
   {% for note in notes %}
   <li><a href="{{ url_for('notes.detail', note_id=note['id']) }}">{{ note['title'] }}</a></li>
   {% endfor %}
 </ul>
+{% elif term %}
+<p>No notes match your search.</p>
 {% else %}
 <p>No notes yet. Add one below.</p>
 {% endif %}

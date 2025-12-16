@@ -255,6 +255,52 @@ class NoteTests(AppFixture):
         self.assertEqual(self.post("/notes", data).status_code, 303)
 
 
+class SearchTests(AppFixture):
+    def test_search_uses_only_owned_titles_in_newest_first_order(self):
+        self.sign_in()
+        old = self.create_note("Straße plans")
+        self.create_note("Garden list", "Meet near the Straße.")
+        new = self.create_note("Straße errands")
+        bob = self.app.test_client()
+        self.sign_in("bob", BOB_PASSWORD, bob)
+        self.create_note("Straße shopping", client=bob)
+
+        page = self.get("/", query_string={"q": "  STRASSE  "})
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(b"3 of 100 notes", page.data)
+        self.assertIn(b"2 matching notes", page.data)
+        older_link, newer_link = (f'href="{path}"'.encode() for path in (old, new))
+        self.assertLess(page.data.index(newer_link), page.data.index(older_link))
+        self.assertNotIn(b"Garden list", page.data)
+        self.assertNotIn(b"shopping", page.data)
+
+    def test_search_handles_literal_text_empty_terms_and_no_matches(self):
+        self.sign_in()
+        self.create_note("Save 20%")
+        self.create_note("Buy seeds")
+        literal = self.get("/", query_string={"q": "%"})
+        self.assertIn(b"Save 20%", literal.data)
+        self.assertNotIn(b"Buy seeds", literal.data)
+        empty = self.get("/", query_string={"q": " "})
+        self.assertIn(b"Buy seeds", empty.data)
+        self.assertNotIn(b"matching notes", empty.data)
+        missing = self.get("/", query_string={"q": "peas"})
+        self.assertIn(b"No notes match your search.", missing.data)
+        self.assertIn(b'href="/">Clear search', missing.data)
+
+    def test_search_validates_query_bounds(self):
+        self.sign_in()
+        valid = self.get("/", query_string={"q": "é" * TITLE_MAX})
+        self.assertEqual(valid.status_code, 200)
+        for query in (
+            {"q": "é" * (TITLE_MAX + 1)},
+            {"q": "one\0two"},
+            MultiDict([("q", "one"), ("q", "two")]),
+        ):
+            with self.subTest(query=query):
+                self.assertEqual(self.get("/", query_string=query).status_code, 400)
+
+
 class EditTests(AppFixture):
     def test_owner_can_edit_in_place(self):
         self.sign_in()

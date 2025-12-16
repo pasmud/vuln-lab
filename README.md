@@ -34,7 +34,7 @@ Open `http://127.0.0.1:5000/`. `VULN_LAB_LOCAL_HTTP=1` is explicitly for this lo
 | Method and path | Purpose |
 | --- | --- |
 | `GET /login`, `POST /login` | Show the sign-in form and authenticate a CLI-created account |
-| `GET /` | List the signed-in user's notes, newest first |
+| `GET /` | List the signed-in user's notes, newest first, optionally filtered by `q` |
 | `POST /notes` | Create a note for the signed-in user |
 | `GET /notes/<id>` | Read an owned note |
 | `GET /notes/<id>/edit`, `POST /notes/<id>/edit` | Show the edit form and save changes to an owned note |
@@ -42,6 +42,8 @@ Open `http://127.0.0.1:5000/`. `VULN_LAB_LOCAL_HTTP=1` is explicitly for this lo
 | `POST /logout` | Sign out |
 
 Successful form submissions redirect with `303`. Missing notes and notes owned by another user both return `404`. Invalid fields or unverifiable forms return `400`, incorrect credentials return `401`, and a request body over 32 KiB on a form route returns `413`. The forms use URL-encoded bodies (`415` for unsupported types). Titles and bodies are limited to 80 and 2,000 characters respectively, whether creating or editing. At 100 notes, delete one before adding another (`409`); editing is still available and does not change list order. If sign-in returns `503`, check that you ran `init-db` from this checkout and that the SQLite file is accessible.
+
+**Search note titles** matches a literal, case-insensitive substring of your own titles. An omitted or whitespace-only `q` shows the full list. Repeated terms, NUL characters, or terms longer than 80 characters return `400`. The quota display always counts your full list. Search terms appear in the URL and may be kept in browser history or server access logs.
 
 ## Verify
 

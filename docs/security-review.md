@@ -14,6 +14,7 @@ The browser provides credentials, note text, and a note ID. The server determine
 
 ## Deliberate limits
 
+- Title search checks only the signed-in owner's list (at most 100 titles), never note bodies. Query text can appear in browser history and server access logs.
 - The sample runs on local IPv4 loopback. Host validation is not a substitute for binding the server to loopback. This project doesn't include deployment or TLS configuration, rate limiting, multifactor authentication, or account recovery.
 - Flask signs session cookies; it does not encrypt them. The app stores only a user ID, form token, and session metadata in the cookie. Sessions have an eight-hour lifetime with no automatic per-request refresh. Signing out clears the browser session but does not centrally revoke a previously issued cookie; changing the signing key invalidates existing sessions.
 - SQLite contents are not encrypted, and deleting a note is not secure erasure. Keep the database in a private instance directory and use synthetic data. Existing file permissions are not changed by `init-db`.

@@ -96,6 +96,44 @@ class AccountTests(AppFixture):
                 self.assertIn(message, result.output)
         self.sign_in()
 
+    def test_configured_database_is_explicitly_initialized_and_preserves_data(self):
+        original = self.app.config["DATABASE"]
+        self.sign_in()
+        self.create_note("Original database note")
+
+        alternate = original.parent / "alternate store" / "notes #2.sqlite3"
+        with patch.dict(os.environ, {"VULN_LAB_DATABASE": str(alternate)}):
+            app = create_app({"TESTING": True, "SECRET_KEY": FIXTURE_KEY})
+        self.assertFalse(alternate.parent.exists())
+        runner = app.test_cli_runner()
+        result = runner.invoke(args=["init-db"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertTrue(alternate.is_file())
+        result = runner.invoke(args=["add-user", "alice"], input=f"{ALICE_PASSWORD}\n" * 2)
+        self.assertEqual(result.exit_code, 0, result.output)
+        client = app.test_client()
+        self.sign_in(client=client)
+        self.assertIn(b"No notes yet.", self.get("/", client).data)
+        path = self.create_note("Alternate database note", client=client)
+
+        result = runner.invoke(args=["init-db"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn(b"Alternate database note", self.get(path, client).data)
+        self.assertNotIn(b"Alternate database note", self.get("/").data)
+        self.assertIn(b"Original database note", self.get("/").data)
+        self.client.application = app  # Keep the browser's existing cookie after switching stores.
+        response = self.get("/")
+        self.assertEqual((response.status_code, response.location), (303, "/login"))
+
+    def test_database_environment_rejects_non_absolute_values(self):
+        for value in ("", "notes.sqlite3", "~/notes.sqlite3"):
+            with (
+                self.subTest(value=value),
+                patch.dict(os.environ, {"VULN_LAB_DATABASE": value}),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "VULN_LAB_DATABASE.*absolute path"):
+                    create_app({"SECRET_KEY": FIXTURE_KEY})
+
     def test_bad_credentials_have_same_response(self):
         token = self.token("/login")
         responses = [

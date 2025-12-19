@@ -19,9 +19,13 @@ python -m flask --app vuln_lab add-user bob
 VULN_LAB_LOCAL_HTTP=1 python -m flask --app vuln_lab run --host 127.0.0.1 --port 5000
 ```
 
-Pick a different synthetic passphrase of 12–128 characters for each account. Passwords are prompted without echo and stored as hashes. Only `init-db` creates `instance/notes.sqlite3`; running it again preserves existing accounts and notes. If you restart the app with a newly generated secret, sign in again; the database is unchanged.
+Pick a different synthetic passphrase of 12–128 characters for each account. Passwords are prompted without echo and stored as hashes. Only `init-db` creates the database; running it again preserves existing accounts and notes. If you restart the app with a newly generated secret, sign in again; the database is unchanged.
 
 Open `http://127.0.0.1:5000/`. `VULN_LAB_LOCAL_HTTP=1` is explicitly for this loopback walkthrough: it disables the cookie's `Secure` flag for that process. Leave it unset for secure cookies. Keep the development server bound to `127.0.0.1` with debug off.
+
+### Database location
+
+The default is `instance/notes.sqlite3`. To use a different file, export `VULN_LAB_DATABASE` with an absolute path (for example, `export VULN_LAB_DATABASE="$HOME/.local/share/vuln-lab/notes.sqlite3"`) before running `init-db`, `add-user`, and the app. Use the same value for all three commands. A relative or empty value fails at startup. Changing the path selects a different database; it does not move or copy notes. Keep the file in a private directory. Sessions for an explicitly configured path are scoped to that path; sign in again when switching files.
 
 ### Try it
 
@@ -41,7 +45,7 @@ Open `http://127.0.0.1:5000/`. `VULN_LAB_LOCAL_HTTP=1` is explicitly for this lo
 | `GET /notes/<id>/delete`, `POST /notes/<id>/delete` | Show confirmation and delete an owned note; only the CSRF-protected POST changes data |
 | `POST /logout` | Sign out |
 
-Successful form submissions redirect with `303`. Missing notes and notes owned by another user both return `404`. Invalid fields or unverifiable forms return `400`, incorrect credentials return `401`, and a request body over 32 KiB on a form route returns `413`. The forms use URL-encoded bodies (`415` for unsupported types). Titles and bodies are limited to 80 and 2,000 characters respectively, whether creating or editing. At 100 notes, delete one before adding another (`409`); editing is still available and does not change list order. If sign-in returns `503`, check that you ran `init-db` from this checkout and that the SQLite file is accessible.
+Successful form submissions redirect with `303`. Missing notes and notes owned by another user both return `404`. Invalid fields or unverifiable forms return `400`, incorrect credentials return `401`, and a request body over 32 KiB on a form route returns `413`. The forms use URL-encoded bodies (`415` for unsupported types). Titles and bodies are limited to 80 and 2,000 characters respectively, whether creating or editing. At 100 notes, delete one before adding another (`409`); editing is still available and does not change list order. If sign-in returns `503`, check that you ran `init-db` for the same database path and that the SQLite file is accessible.
 
 **Search note titles** matches a literal, case-insensitive substring of your own titles. An omitted or whitespace-only `q` shows the full list. Repeated terms, NUL characters, or terms longer than 80 characters return `400`. The quota display always counts your full list. Search terms appear in the URL and may be kept in browser history or server access logs.
 

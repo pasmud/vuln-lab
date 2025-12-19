@@ -1,3 +1,4 @@
+import hmac
 import os
 import secrets
 import sqlite3
@@ -60,6 +61,7 @@ def database_error(error):
 
 def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
+    database = os.environ.get("VULN_LAB_DATABASE")
     app.config.from_mapping(
         DATABASE=Path(app.instance_path) / "notes.sqlite3",
         SECRET_KEY=os.environ.get("VULN_LAB_SECRET_KEY"),
@@ -77,6 +79,15 @@ def create_app(test_config=None):
     key = app.config["SECRET_KEY"]
     if not isinstance(key, str) or len(key.encode("utf-8")) < 32:
         raise RuntimeError("Set VULN_LAB_SECRET_KEY to a random value of at least 32 bytes.")
+    if database is not None and (test_config is None or "DATABASE" not in test_config):
+        path = Path(database)
+        if "\0" in database or not path.is_absolute():
+            raise RuntimeError("VULN_LAB_DATABASE must be an absolute path to a SQLite file.")
+        path = path.resolve()
+        app.config["DATABASE"] = path
+        # User IDs are local to each database, so don't carry sessions across paths.
+        scope = f"vuln-lab database:{path.as_uri()}".encode("ascii")
+        app.secret_key = hmac.digest(key.encode("utf-8"), scope, "sha256")
 
     app.teardown_appcontext(db.close_db)
     app.cli.add_command(db.init_db)

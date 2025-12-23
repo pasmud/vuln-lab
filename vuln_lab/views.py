@@ -12,6 +12,12 @@ _DUMMY_HASH = generate_password_hash(secrets.token_urlsafe(32))
 _NOTE_ID = re.compile(r"[1-9][0-9]{0,18}")
 
 
+def csrf_token():
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_urlsafe(32)
+    return session["csrf_token"]
+
+
 def field(name):
     values = request.form.getlist(name)
     if len(values) != 1:
@@ -51,6 +57,7 @@ def login():
     session.clear()
     session["user_id"] = user["id"]
     session.permanent = True
+    csrf_token()  # Issue the form token now so the first signed-in page won't refresh the cookie.
     return redirect(url_for("notes.index"), code=303)
 
 

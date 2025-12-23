@@ -1,5 +1,6 @@
 import os
 import re
+from datetime import timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -456,6 +457,42 @@ class RequestTests(AppFixture):
             ):
                 with self.assertRaisesRegex(RuntimeError, "VULN_LAB_SECRET_KEY"):
                     create_app()
+
+    def test_session_lifetime_defaults_to_eight_hours_and_validates_environment(self):
+        with patch.dict(os.environ):
+            os.environ.pop("VULN_LAB_SESSION_MINUTES", None)
+            app = create_app({"SECRET_KEY": FIXTURE_KEY, "DATABASE": self.app.config["DATABASE"]})
+        self.assertEqual(app.permanent_session_lifetime, timedelta(hours=8))
+        for value in ("", "0", "481", "-1", "1.5", "١", " 30", "9" * 100):
+            with (
+                self.subTest(value=value),
+                patch.dict(os.environ, {"VULN_LAB_SESSION_MINUTES": value}),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "VULN_LAB_SESSION_MINUTES"):
+                    create_app({"SECRET_KEY": FIXTURE_KEY})
+
+    def test_short_session_expires_without_refreshing_on_first_page(self):
+        with patch.dict(os.environ, {"VULN_LAB_SESSION_MINUTES": "1"}):
+            app = create_app(
+                {
+                    "TESTING": True,
+                    "DATABASE": self.app.config["DATABASE"],
+                    "SECRET_KEY": FIXTURE_KEY,
+                    "SESSION_COOKIE_SECURE": True,
+                }
+            )
+        client = app.test_client()
+        signer_clock = "itsdangerous.TimestampSigner.get_timestamp"
+        with patch(signer_clock, return_value=1_800_000_000) as clock:
+            login = self.sign_in(client=client)
+            self.assertIn("Expires=", login.headers["Set-Cookie"])
+            clock.return_value += 59
+            page = self.get("/", client)
+            self.assertEqual(page.status_code, 200)
+            self.assertNotIn("Set-Cookie", page.headers)
+            clock.return_value += 2
+            expired = self.get("/", client)
+            self.assertEqual((expired.status_code, expired.location), (303, "/login"))
 
     def test_missing_database_is_not_created_by_a_request(self):
         path = self.app.config["DATABASE"]

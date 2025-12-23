@@ -11,10 +11,12 @@ from werkzeug.exceptions import BadRequest, HTTPException, SecurityError, Servic
 from . import db, views
 
 
-def csrf_token():
-    if "csrf_token" not in session:
-        session["csrf_token"] = secrets.token_urlsafe(32)
-    return session["csrf_token"]
+def configured_session_lifetime():
+    value = os.environ.get("VULN_LAB_SESSION_MINUTES", "480")
+    minutes = int(value) if len(value) <= 3 and value.isascii() and value.isdecimal() else 0
+    if not 1 <= minutes <= 480:
+        raise RuntimeError("VULN_LAB_SESSION_MINUTES must be a whole number from 1 to 480.")
+    return timedelta(minutes=minutes)
 
 
 def protect_form():
@@ -69,13 +71,14 @@ def create_app(test_config=None):
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=os.environ.get("VULN_LAB_LOCAL_HTTP") != "1",
-        PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
         SESSION_REFRESH_EACH_REQUEST=False,
         TRUSTED_HOSTS=["localhost", "127.0.0.1"],
         MAX_CONTENT_LENGTH=32 * 1024,
     )
     if test_config is not None:
         app.config.update(test_config)
+    if test_config is None or "PERMANENT_SESSION_LIFETIME" not in test_config:
+        app.config["PERMANENT_SESSION_LIFETIME"] = configured_session_lifetime()
     key = app.config["SECRET_KEY"]
     if not isinstance(key, str) or len(key.encode("utf-8")) < 32:
         raise RuntimeError("Set VULN_LAB_SECRET_KEY to a random value of at least 32 bytes.")
@@ -94,7 +97,7 @@ def create_app(test_config=None):
     app.cli.add_command(db.add_user)
     app.before_request(protect_form)
     app.after_request(secure_response)
-    app.jinja_env.globals["csrf_token"] = csrf_token
+    app.jinja_env.globals["csrf_token"] = views.csrf_token
     app.register_error_handler(HTTPException, http_error)
     app.register_error_handler(sqlite3.OperationalError, database_error)
     app.register_blueprint(views.bp)
